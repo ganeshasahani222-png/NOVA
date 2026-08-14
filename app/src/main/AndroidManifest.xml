@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Voice input -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- AI API calls -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+        Device Administrator permission.
+        This ONLY grants access to the specific policies declared in
+        res/xml/device_admin_policies.xml (e.g. force-lock, password
+        quality). It does NOT grant unrestricted system control, root
+        access, or access to any policy not explicitly listed there.
+        The user must explicitly activate Nova as a device admin via
+        system Settings; it is never enabled silently by the app.
+    -->
+    <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN"
+        tools:node="merge" />
+
+    <!-- Optional: only needed if/when an AccessibilityService module is added -->
+    <!-- <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" /> -->
+
+    <application
+        android:name=".NovaApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Nova">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Nova">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Device Admin receiver. Requires user confirmation through
+            Settings > Security > Device Admin Apps before any policy
+            declared in device_admin_policies.xml takes effect.
+        -->
+        <receiver
+            android:name=".admin.NovaDeviceAdminReceiver"
+            android:exported="true"
+            android:label="@string/device_admin_label"
+            android:description="@string/device_admin_description"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Nova</string>
+    <string name="device_admin_label">Nova Assistant</string>
+    <string name="device_admin_description">Allows Nova to perform the specific, limited actions listed in its device admin policy (such as locking the screen when you ask it to). Nova never gains full control of your device, and you can revoke this at any time in Settings.</string>
+
+    <string name="chat_input_hint">Ask Nova anything…</string>
+    <string name="mic_content_description">Tap to speak to Nova</string>
+    <string name="send_content_description">Send message</string>
+</resources>

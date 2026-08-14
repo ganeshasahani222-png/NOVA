@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Declares the SPECIFIC device admin policies Nova is allowed to use.
+    Android will only permit the policies listed here — nothing else,
+    regardless of what the app's code attempts to call. Trim this list
+    to whatever your use case actually needs; every extra policy is an
+    extra permission the user has to trust you with.
+
+    Reference: https://developer.android.com/guide/topics/admin/device-admin
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <!-- Let the app be notified of / require a screen lock password -->
+        <limit-password />
+        <watch-login />
+        <!-- Allow the app to lock the screen on user request (e.g. "Nova, lock my phone") -->
+        <force-lock />
+        <!--
+            Intentionally NOT requesting wipe-data, disable-camera, or
+            other high-impact policies by default. Add them only if a
+            real feature needs them, and disclose that clearly to users
+            in-app before requesting activation.
+        -->
+    </uses-policies>
+</device-admin>
