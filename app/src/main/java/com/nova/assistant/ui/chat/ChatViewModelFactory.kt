@@ -10,7 +10,8 @@ class ChatViewModelFactory(private val container: NovaContainer) : ViewModelProv
         require(modelClass.isAssignableFrom(ChatViewModel::class.java))
         return ChatViewModel(
             aiEngine = container.aiEngine,
-            speechRecognitionController = container.speechRecognitionController
+            speechRecognitionController = container.speechRecognitionController,
+            textToSpeechHelper = container.textToSpeechHelper
         ) as T
     }
 }
