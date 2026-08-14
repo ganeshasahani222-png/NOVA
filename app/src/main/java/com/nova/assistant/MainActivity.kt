@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NovaTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val viewModel = viewModel(factory = ChatViewModelFactory(container))
+                    val viewModel = viewModel<com.nova.assistant.ui.chat.ChatViewModel>(factory = ChatViewModelFactory(container))
                     ChatScreen(
                         viewModel = viewModel,
                         hasMicPermission = hasMicPermission,
