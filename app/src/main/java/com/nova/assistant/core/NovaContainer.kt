@@ -6,6 +6,7 @@ import com.nova.assistant.ai.AiEngine
 import com.nova.assistant.ai.StubAiEngine
 import com.nova.assistant.intents.SystemActionDispatcher
 import com.nova.assistant.voice.SpeechRecognitionController
+import com.nova.assistant.voice.TextToSpeechHelper
 
 /**
  * Minimal, dependency-injection-framework-free composition root.
