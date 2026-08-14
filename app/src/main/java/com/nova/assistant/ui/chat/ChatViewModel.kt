@@ -11,6 +11,7 @@ import com.nova.assistant.data.ChatMessage
 import com.nova.assistant.data.Sender
 import com.nova.assistant.voice.SpeechRecognitionController
 import com.nova.assistant.voice.VoiceListener
+import com.nova.assistant.voice.TextToSpeechHelper
 import kotlinx.coroutines.launch
 
 data class ChatUiState(
@@ -28,7 +29,8 @@ data class ChatUiState(
  */
 class ChatViewModel(
     private val aiEngine: AiEngine,
-    private val speechRecognitionController: SpeechRecognitionController
+    private val speechRecognitionController: SpeechRecognitionController,
+    private val textToSpeechHelper: TextToSpeechHelper
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ChatUiState())
@@ -57,7 +59,13 @@ class ChatViewModel(
 
             override fun onFinalResult(text: String) {
                 uiState = uiState.copy(inputText = "")
-                sendMessage(text)
+                if (text.trim().lowercase().contains("hey nova") ||
+                    text.trim().lowercase().contains("hey, nova")
+                ) {
+                    textToSpeechHelper.speak("Ji sir, boliye. Kya kaam hai, kis kaam se yaad kiya?")
+                } else {
+                    sendMessage(text)
+                }
             }
 
             override fun onListeningEnded() {
