@@ -2,31 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Voice input -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
-    <!-- AI API calls -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Background wake-word listening -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!--
-        Device Administrator permission.
-        This ONLY grants access to the specific policies declared in
-        res/xml/device_admin_policies.xml (e.g. force-lock, password
-        quality). It does NOT grant unrestricted system control, root
-        access, or access to any policy not explicitly listed there.
-        The user must explicitly activate Nova as a device admin via
-        system Settings; it is never enabled silently by the app.
-    -->
     <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN"
         tools:node="merge" />
-
-    <!-- Optional: only needed if/when an AccessibilityService module is added -->
-    <!-- <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" /> -->
 
     <application
         android:name=".NovaApplication"
@@ -47,11 +30,11 @@
             </intent-filter>
         </activity>
 
-        <!--
-            Device Admin receiver. Requires user confirmation through
-            Settings > Security > Device Admin Apps before any policy
-            declared in device_admin_policies.xml takes effect.
-        -->
+        <service
+            android:name=".voice.NovaListeningService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <receiver
             android:name=".admin.NovaDeviceAdminReceiver"
             android:exported="true"
