@@ -22,6 +22,7 @@ class NovaContainer(context: Context) {
     val aiEngine: AiEngine = StubAiEngine()
 
     val speechRecognitionController = SpeechRecognitionController(appContext)
+    val textToSpeechHelper = TextToSpeechHelper(appContext)
     val systemActionDispatcher = SystemActionDispatcher(appContext)
     val deviceAdminManager = DeviceAdminManager(appContext)
 }
