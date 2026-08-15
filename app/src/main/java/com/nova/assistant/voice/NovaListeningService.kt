@@ -53,11 +53,11 @@ class NovaListeningService : Service() {
             override fun onListeningEnded() {}
 
             override fun onError(message: String) {
-                // Restart listening after a brief error (e.g. no speech detected)
-                startListeningLoop()
+                // Wait briefly before restarting to avoid a rapid on/off loop
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    listenOnce(isFollowUpCommand = false)
+                }, 1200)
             }
-        })
-    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
