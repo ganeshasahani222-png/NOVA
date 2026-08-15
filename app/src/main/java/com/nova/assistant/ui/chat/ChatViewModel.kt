@@ -10,6 +10,7 @@ import com.nova.assistant.ai.AiResult
 import com.nova.assistant.data.ChatMessage
 import com.nova.assistant.data.Sender
 import com.nova.assistant.intents.AlarmHelper
+import com.nova.assistant.intents.SystemActionDispatcher
 import com.nova.assistant.voice.SpeechRecognitionController
 import com.nova.assistant.voice.TextToSpeechHelper
 import com.nova.assistant.voice.VoiceListener
@@ -28,7 +29,8 @@ class ChatViewModel(
     private val aiEngine: AiEngine,
     private val speechRecognitionController: SpeechRecognitionController,
     private val textToSpeechHelper: TextToSpeechHelper,
-    private val alarmHelper: AlarmHelper
+    private val alarmHelper: AlarmHelper,
+    private val systemActionDispatcher: SystemActionDispatcher
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ChatUiState())
@@ -92,11 +94,9 @@ class ChatViewModel(
         try {
             val lower = text.trim().lowercase(Locale.getDefault())
 
-            val alarmHandled = tryHandleAlarmCommand(lower, text)
-            if (alarmHandled) return
-
-            val timerHandled = tryHandleTimerCommand(lower, text)
-            if (timerHandled) return
+            if (tryHandleAlarmCommand(lower, text)) return
+            if (tryHandleTimerCommand(lower, text)) return
+            if (tryHandleSystemCommand(lower, text)) return
 
             sendMessage(text)
         } catch (e: Exception) {
@@ -176,6 +176,43 @@ class ChatViewModel(
         } else {
             "Sorry, I couldn't start the timer. No clock app found."
         }
+        appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+        textToSpeechHelper.speak(reply)
+        return true
+    }
+
+    private fun tryHandleSystemCommand(lower: String, originalText: String): Boolean {
+        val reply: String? = when {
+            lower.contains("volume up") || lower.contains("increase volume") -> {
+                systemActionDispatcher.increaseVolume()
+                "Volume increased."
+            }
+            lower.contains("volume down") || lower.contains("decrease volume") -> {
+                systemActionDispatcher.decreaseVolume()
+                "Volume decreased."
+            }
+            lower.contains("mute") -> {
+                systemActionDispatcher.muteVolume()
+                "Muted."
+            }
+            lower.contains("brightness") -> {
+                systemActionDispatcher.openDisplaySettings()
+                "Opening display settings — you can adjust brightness there."
+            }
+            lower.contains("wifi") || lower.contains("wi-fi") -> {
+                systemActionDispatcher.openWifiSettings()
+                "Opening WiFi settings."
+            }
+            lower.contains("bluetooth") -> {
+                systemActionDispatcher.openBluetoothSettings()
+                "Opening Bluetooth settings."
+            }
+            else -> null
+        }
+
+        if (reply == null) return false
+
+        appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
         textToSpeechHelper.speak(reply)
         return true
