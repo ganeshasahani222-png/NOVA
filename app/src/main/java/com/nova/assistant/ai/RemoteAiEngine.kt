@@ -1,5 +1,6 @@
 package com.nova.assistant.ai
 
+import com.nova.assistant.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -9,66 +10,76 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /**
- * Skeleton for a real LLM-backed [AiEngine].
- *
- * This class deliberately does NOT ship with a hardcoded API key or a
- * fixed provider. Wire it up by:
- *   1. Supplying [apiKeyProvider] — read the key from the Android
- *      Keystore, EncryptedSharedPreferences, or a backend you control.
- *      Never hardcode a key in source or commit one to version control.
- *   2. Setting [endpoint] and [buildRequestBody] to match whichever
- *      API you integrate (Anthropic, OpenAI, your own backend, etc).
- *
- * The request/response shapes below are illustrative placeholders —
- * update them to match the real API's documented schema before use.
+ * AiEngine implementation backed by Google's Gemini API.
+ * The API key is read from BuildConfig, which is generated at build
+ * time from local.properties (locally) or a GitHub Actions secret
+ * (in CI) — it is never hardcoded in source.
  */
 class RemoteAiEngine(
-    private val endpoint: String,
-    private val apiKeyProvider: () -> String?,
-    private val client: OkHttpClient = OkHttpClient()
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
 ) : AiEngine {
+
+    private val apiKey: String get() = BuildConfig.GEMINI_API_KEY
+    private val endpoint =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
     override suspend fun generateResponse(prompt: String, history: List<String>): AiResult =
         withContext(Dispatchers.IO) {
-            val apiKey = apiKeyProvider()
-                ?: return@withContext AiResult.Failure("No API key configured.")
+            if (apiKey.isBlank()) {
+                return@withContext AiResult.Failure("No Gemini API key configured.")
+            }
 
             try {
-                val body = buildRequestBody(prompt, history)
+                val body = buildRequestBody(prompt)
                 val request = Request.Builder()
-                    .url(endpoint)
-                    .addHeader("Authorization", "Bearer $apiKey")
+                    .url("$endpoint?key=$apiKey")
                     .addHeader("Content-Type", "application/json")
                     .post(body.toString().toRequestBody("application/json".toMediaType()))
                     .build()
 
                 client.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@withContext AiResult.Failure(
-                            "AI request failed: HTTP ${response.code}"
+                            "Gemini request failed: HTTP ${response.code} — ${responseBody.take(200)}"
                         )
                     }
-                    val text = parseResponseText(response.body?.string().orEmpty())
+                    val text = parseResponseText(responseBody)
                     AiResult.Success(text)
                 }
             } catch (e: IOException) {
                 AiResult.Failure("Network error: ${e.message}")
+            } catch (e: Exception) {
+                AiResult.Failure("Unexpected error: ${e.message}")
             }
         }
 
-    /** Override/replace to match the target API's request schema. */
-    private fun buildRequestBody(prompt: String, history: List<String>): JSONObject =
-        JSONObject().apply {
-            put("prompt", prompt)
-            put("history", JSONArray(history))
+    private fun buildRequestBody(prompt: String): JSONObject {
+        val contents = JSONArray().apply {
+            put(JSONObject().apply {
+                put("role", "user")
+                put("parts", JSONArray().apply {
+                    put(JSONObject().apply { put("text", prompt) })
+                })
+            })
         }
+        return JSONObject().apply {
+            put("contents", contents)
+        }
+    }
 
-    /** Override/replace to match the target API's response schema. */
     private fun parseResponseText(rawBody: String): String {
         return runCatching {
-            JSONObject(rawBody).optString("text", rawBody)
-        }.getOrDefault(rawBody)
-    }
-}
+            val json = JSONObject(rawBody)
+            val candidates = json.getJSONArray("candidates")
+            val firstCandidate = candidates.getJSONObject(0)
+            val content = firstCandidate.getJSONObject("content")
+            val parts = content.getJSONArray("parts")
+            parts.getJSONObject(0).getString("text")
+        }.getOrDefault("Sorry, I
