@@ -12,12 +12,6 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-/**
- * AiEngine implementation backed by Google's Gemini API.
- * The API key is read from BuildConfig, which is generated at build
- * time from local.properties (locally) or a GitHub Actions secret
- * (in CI) — it is never hardcoded in source.
- */
 class RemoteAiEngine(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -47,39 +41,46 @@ class RemoteAiEngine(
                     val responseBody = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@withContext AiResult.Failure(
-                            "Gemini request failed: HTTP ${response.code} — ${responseBody.take(200)}"
+                            "Gemini request failed with code " + response.code
                         )
                     }
                     val text = parseResponseText(responseBody)
                     AiResult.Success(text)
                 }
             } catch (e: IOException) {
-                AiResult.Failure("Network error: ${e.message}")
+                AiResult.Failure("Network error")
             } catch (e: Exception) {
-                AiResult.Failure("Unexpected error: ${e.message}")
+                AiResult.Failure("Unexpected error")
             }
         }
 
     private fun buildRequestBody(prompt: String): JSONObject {
-        val contents = JSONArray().apply {
-            put(JSONObject().apply {
-                put("role", "user")
-                put("parts", JSONArray().apply {
-                    put(JSONObject().apply { put("text", prompt) })
-                })
-            })
-        }
-        return JSONObject().apply {
-            put("contents", contents)
-        }
+        val contents = JSONArray()
+        val message = JSONObject()
+        message.put("role", "user")
+        val partsArray = JSONArray()
+        val part = JSONObject()
+        part.put("text", prompt)
+        partsArray.put(part)
+        message.put("parts", partsArray)
+        contents.put(message)
+
+        val root = JSONObject()
+        root.put("contents", contents)
+        return root
     }
 
     private fun parseResponseText(rawBody: String): String {
-        return runCatching {
+        val fallback = "Sorry, I did not understand the response."
+        return try {
             val json = JSONObject(rawBody)
             val candidates = json.getJSONArray("candidates")
             val firstCandidate = candidates.getJSONObject(0)
             val content = firstCandidate.getJSONObject("content")
             val parts = content.getJSONArray("parts")
             parts.getJSONObject(0).getString("text")
-        }.getOrDefault("Sorry, I could not understand the response.")
+        } catch (e: Exception) {
+            fallback
+        }
+    }
+}
