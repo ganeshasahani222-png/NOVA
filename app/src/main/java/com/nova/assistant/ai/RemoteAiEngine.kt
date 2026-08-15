@@ -82,4 +82,4 @@ class RemoteAiEngine(
             val content = firstCandidate.getJSONObject("content")
             val parts = content.getJSONArray("parts")
             parts.getJSONObject(0).getString("text")
-        }.getOrDefault("Sorry, I
+        }.getOrDefault("Sorry, I could not understand the response.")
