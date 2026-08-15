@@ -32,7 +32,8 @@ class RemoteAiEngine(
             try {
                 val body = buildRequestBody(prompt)
                 val request = Request.Builder()
-                    .url("$endpoint?key=$apiKey")
+                    .url(endpoint)
+                    .addHeader("x-goog-api-key", apiKey)
                     .addHeader("Content-Type", "application/json")
                     .post(body.toString().toRequestBody("application/json".toMediaType()))
                     .build()
@@ -41,7 +42,7 @@ class RemoteAiEngine(
                     val responseBody = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@withContext AiResult.Failure(
-                            "Gemini request failed with code " + response.code
+                            "Gemini request failed with code " + response.code + " body: " + responseBody.take(300)
                         )
                     }
                     val text = parseResponseText(responseBody)
