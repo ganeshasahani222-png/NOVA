@@ -225,7 +225,10 @@ class ChatViewModel(
         viewModelScope.launch {
             val history = uiState.messages.map { it.text }
             when (val result = aiEngine.generateResponse(text, history)) {
-                is AiResult.Success -> appendMessage(ChatMessage(sender = Sender.NOVA, text = result.text))
+                is AiResult.Success -> {
+                    appendMessage(ChatMessage(sender = Sender.NOVA, text = result.text))
+                    textToSpeechHelper.speak(result.text)
+                }
                 is AiResult.Failure -> appendMessage(
                     ChatMessage(sender = Sender.SYSTEM, text = result.message, isError = true)
                 )
