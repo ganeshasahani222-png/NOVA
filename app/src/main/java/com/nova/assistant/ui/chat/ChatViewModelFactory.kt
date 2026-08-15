@@ -12,7 +12,8 @@ class ChatViewModelFactory(private val container: NovaContainer) : ViewModelProv
             aiEngine = container.aiEngine,
             speechRecognitionController = container.speechRecognitionController,
             textToSpeechHelper = container.textToSpeechHelper,
-            alarmHelper = container.alarmHelper
+            alarmHelper = container.alarmHelper,
+            systemActionDispatcher = container.systemActionDispatcher
         ) as T
     }
 }
