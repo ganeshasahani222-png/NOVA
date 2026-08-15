@@ -9,10 +9,13 @@ import com.nova.assistant.ai.AiEngine
 import com.nova.assistant.ai.AiResult
 import com.nova.assistant.data.ChatMessage
 import com.nova.assistant.data.Sender
+import com.nova.assistant.intents.AlarmHelper
 import com.nova.assistant.voice.SpeechRecognitionController
-import com.nova.assistant.voice.VoiceListener
 import com.nova.assistant.voice.TextToSpeechHelper
+import com.nova.assistant.voice.VoiceListener
 import kotlinx.coroutines.launch
+import java.util.Locale
+import java.util.regex.Pattern
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -30,7 +33,8 @@ data class ChatUiState(
 class ChatViewModel(
     private val aiEngine: AiEngine,
     private val speechRecognitionController: SpeechRecognitionController,
-    private val textToSpeechHelper: TextToSpeechHelper
+    private val textToSpeechHelper: TextToSpeechHelper,
+    private val alarmHelper: AlarmHelper
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ChatUiState())
@@ -44,7 +48,7 @@ class ChatViewModel(
         val text = uiState.inputText.trim()
         if (text.isEmpty()) return
         uiState = uiState.copy(inputText = "")
-        sendMessage(text)
+        handleIncomingText(text)
     }
 
     fun startVoiceInput() {
@@ -59,12 +63,11 @@ class ChatViewModel(
 
             override fun onFinalResult(text: String) {
                 uiState = uiState.copy(inputText = "")
-                if (text.trim().lowercase().contains("hey nova") ||
-                    text.trim().lowercase().contains("hey, nova")
-                ) {
+                val lowerText = text.trim().lowercase()
+                if (lowerText.contains("nova")) {
                     textToSpeechHelper.speak("Ji sir, boliye. Kya kaam hai, kis kaam se yaad kiya?")
                 } else {
-                    sendMessage(text)
+                    handleIncomingText(text)
                 }
             }
 
@@ -82,6 +85,94 @@ class ChatViewModel(
     fun stopVoiceInput() {
         speechRecognitionController.stopListening()
         uiState = uiState.copy(isListening = false)
+    }
+
+    /**
+     * Routes incoming text (from typing or voice) to a built-in
+     * command handler first (alarms, timers). Falls through to the
+     * AI engine for everything else.
+     */
+    private fun handleIncomingText(text: String) {
+        val lower = text.trim().lowercase(Locale.getDefault())
+
+        val alarmHandled = tryHandleAlarmCommand(lower, text)
+        if (alarmHandled) return
+
+        val timerHandled = tryHandleTimerCommand(lower, text)
+        if (timerHandled) return
+
+        sendMessage(text)
+    }
+
+    private fun tryHandleAlarmCommand(lower: String, originalText: String): Boolean {
+        if (!lower.contains("alarm")) return false
+
+        val timePattern = Pattern.compile("(\\d{1,2})[:.]?(\\d{2})?\\s*(am|pm)?")
+        val matcher = timePattern.matcher(lower)
+
+        if (matcher.find()) {
+            var hour = matcher.group(1)?.toIntOrNull() ?: return fallbackAlarm(originalText)
+            val minute = matcher.group(2)?.toIntOrNull() ?: 0
+            val meridiem = matcher.group(3)
+
+            if (meridiem == "pm" && hour < 12) hour += 12
+            if (meridiem == "am" && hour == 12) hour = 0
+
+            val success = alarmHelper.setAlarm(hour, minute, "Nova Alarm")
+            val reply = if (success) {
+                "Alarm set for ${String.format("%02d:%02d", hour, minute)}."
+            } else {
+                "Sorry, I couldn't set the alarm. No clock app found."
+            }
+            appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
+            appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+            textToSpeechHelper.speak(reply)
+            return true
+        }
+        return fallbackAlarm(originalText)
+    }
+
+    private fun fallbackAlarm(originalText: String): Boolean {
+        appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
+        val reply = "Please tell me a specific time, like 'set alarm at 7:30 am'."
+        appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+        textToSpeechHelper.speak(reply)
+        return true
+    }
+
+    private fun tryHandleTimerCommand(lower: String, originalText: String): Boolean {
+        if (!lower.contains("timer")) return false
+
+        val minutePattern = Pattern.compile("(\\d+)\\s*(minute|min)")
+        val secondPattern = Pattern.compile("(\\d+)\\s*(second|sec)")
+
+        val minuteMatcher = minutePattern.matcher(lower)
+        val secondMatcher = secondPattern.matcher(lower)
+
+        val totalSeconds = when {
+            minuteMatcher.find() -> (minuteMatcher.group(1)?.toIntOrNull() ?: 0) * 60
+            secondMatcher.find() -> secondMatcher.group(1)?.toIntOrNull() ?: 0
+            else -> 0
+        }
+
+        appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
+
+        if (totalSeconds <= 0) {
+            val reply = "Please tell me how long, like 'set a timer for 5 minutes'."
+            appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+            textToSpeechHelper.speak(reply)
+            return true
+        }
+
+        val success = alarmHelper.setTimer(totalSeconds, "Nova Timer")
+        val reply = if (success) {
+            "Timer started for $totalSeconds seconds."
+        } else {
+            "Sorry, I couldn't start the timer. No clock app found."
+        }
+        appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+        textToSpeechHelper.speak(reply)
+        return true
     }
 
     private fun sendMessage(text: String) {
