@@ -6,7 +6,9 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.nova.assistant.NovaApplication
 import com.nova.assistant.R
@@ -30,10 +32,10 @@ class NovaListeningService : Service() {
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
-        startListeningLoop()
+        listenOnce(isFollowUpCommand = false)
     }
 
-    private fun startListeningLoop() {
+    private fun listenOnce(isFollowUpCommand: Boolean) {
         speechRecognitionController.startListening(object : VoiceListener {
             override fun onListeningStarted() {}
 
@@ -41,23 +43,28 @@ class NovaListeningService : Service() {
 
             override fun onFinalResult(text: String) {
                 val lowerText = text.trim().lowercase()
-                if (lowerText.contains("nova")) {
+
+                if (!isFollowUpCommand && lowerText.contains("nova")) {
                     textToSpeechHelper.speak(
                         "Ji sir, boliye. Kya kaam hai, kis kaam se yaad kiya?"
                     )
+                    listenOnce(isFollowUpCommand = true)
+                } else if (isFollowUpCommand) {
+                    listenOnce(isFollowUpCommand = false)
+                } else {
+                    listenOnce(isFollowUpCommand = false)
                 }
-                // Restart listening for the next phrase
-                startListeningLoop()
             }
 
             override fun onListeningEnded() {}
 
             override fun onError(message: String) {
-                // Wait briefly before restarting to avoid a rapid on/off loop
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                Handler(Looper.getMainLooper()).postDelayed({
                     listenOnce(isFollowUpCommand = false)
                 }, 1200)
             }
+        })
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
