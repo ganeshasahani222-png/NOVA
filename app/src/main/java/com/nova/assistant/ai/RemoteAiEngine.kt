@@ -21,7 +21,7 @@ class RemoteAiEngine(
 
     private val apiKey: String get() = BuildConfig.GEMINI_API_KEY
     private val endpoint =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     override suspend fun generateResponse(prompt: String, history: List<String>): AiResult =
         withContext(Dispatchers.IO) {
