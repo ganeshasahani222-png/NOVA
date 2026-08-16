@@ -36,6 +36,18 @@ class ChatViewModel(
     private val systemActionDispatcher: SystemActionDispatcher,
     private val callSmsHelper: CallSmsHelper
 ) : ViewModel() {
+    companion object {
+        var activeInstance: ChatViewModel? = null
+    }
+
+    init {
+        activeInstance = this
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        if (activeInstance == this) activeInstance = null
+    }
 
     var uiState by mutableStateOf(ChatUiState())
         private set
