@@ -7,16 +7,6 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 
-/**
- * Wraps Android's built-in [SpeechRecognizer] behind the app-specific
- * [VoiceListener] contract. This is the "voice input" building block —
- * a future wake-word module (e.g. an always-listening Porcupine/Vosk
- * service) can sit in front of this and call [startListening] once a
- * wake word is detected, without any change to this class.
- *
- * Requires RECORD_AUDIO permission to already be granted before
- * [startListening] is called.
- */
 class SpeechRecognitionController(private val context: Context) {
 
     private var recognizer: SpeechRecognizer? = null
@@ -30,7 +20,7 @@ class SpeechRecognitionController(private val context: Context) {
             return
         }
 
-        stopListening() // ensure no duplicate sessions
+        stopListening()
 
         val recognizerInstance = SpeechRecognizer.createSpeechRecognizer(context).also {
             recognizer = it
@@ -40,6 +30,12 @@ class SpeechRecognitionController(private val context: Context) {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+            // Give the recognizer much more time before it decides
+            // the user has stopped speaking, so longer sentences
+            // aren't cut off mid-way.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 15000)
         }
 
         recognizerInstance.setRecognitionListener(object : RecognitionListener {
