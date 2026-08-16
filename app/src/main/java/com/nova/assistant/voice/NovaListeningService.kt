@@ -12,6 +12,15 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.nova.assistant.NovaApplication
 import com.nova.assistant.R
+import com.nova.assistant.ai.AiResult
+import com.nova.assistant.intents.AlarmHelper
+import com.nova.assistant.intents.SystemActionDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import java.util.regex.Pattern
 
 /**
  * Foreground service that keeps the microphone listening even while
@@ -23,12 +32,19 @@ class NovaListeningService : Service() {
 
     private lateinit var speechRecognitionController: SpeechRecognitionController
     private lateinit var textToSpeechHelper: TextToSpeechHelper
+    private lateinit var alarmHelper: AlarmHelper
+    private lateinit var systemActionDispatcher: SystemActionDispatcher
+    private lateinit var container: com.nova.assistant.core.NovaContainer
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
-        val container = (application as NovaApplication).container
+        container = (application as NovaApplication).container
         speechRecognitionController = container.speechRecognitionController
         textToSpeechHelper = container.textToSpeechHelper
+        alarmHelper = container.alarmHelper
+        systemActionDispatcher = container.systemActionDispatcher
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -50,6 +66,7 @@ class NovaListeningService : Service() {
                     )
                     listenOnce(isFollowUpCommand = true)
                 } else if (isFollowUpCommand) {
+                    handleCommand(text)
                     listenOnce(isFollowUpCommand = false)
                 } else {
                     listenOnce(isFollowUpCommand = false)
@@ -64,6 +81,106 @@ class NovaListeningService : Service() {
                 }, 1200)
             }
         })
+    }
+
+    private fun handleCommand(text: String) {
+        val lower = text.trim().lowercase()
+
+        if (tryHandleAlarm(lower)) return
+        if (tryHandleTimer(lower)) return
+        if (tryHandleSystem(lower)) return
+
+        serviceScope.launch {
+            when (val result = container.aiEngine.generateResponse(text, emptyList())) {
+                is AiResult.Success -> textToSpeechHelper.speak(result.text)
+                is AiResult.Failure -> textToSpeechHelper.speak("Sorry, kuch problem hui.")
+            }
+        }
+    }
+
+    private fun tryHandleAlarm(lower: String): Boolean {
+        if (!lower.contains("alarm")) return false
+
+        val timePattern = Pattern.compile("(\\d{1,2})[:.]?(\\d{2})?\\s*(am|pm)?")
+        val matcher = timePattern.matcher(lower)
+
+        if (matcher.find()) {
+            var hour = matcher.group(1)?.toIntOrNull() ?: return false
+            val minute = matcher.group(2)?.toIntOrNull() ?: 0
+            val meridiem = matcher.group(3)
+
+            if (meridiem == "pm" && hour < 12) hour += 12
+            if (meridiem == "am" && hour == 12) hour = 0
+
+            val success = alarmHelper.setAlarm(hour, minute, "Nova Alarm")
+            textToSpeechHelper.speak(
+                if (success) "Alarm set." else "Sorry, alarm set nahi ho paya."
+            )
+            return true
+        }
+        return false
+    }
+
+    private fun tryHandleTimer(lower: String): Boolean {
+        if (!lower.contains("timer")) return false
+
+        val minutePattern = Pattern.compile("(\\d+)\\s*(minute|min)")
+        val secondPattern = Pattern.compile("(\\d+)\\s*(second|sec)")
+
+        val minuteMatcher = minutePattern.matcher(lower)
+        val secondMatcher = secondPattern.matcher(lower)
+
+        val totalSeconds = when {
+            minuteMatcher.find() -> (minuteMatcher.group(1)?.toIntOrNull() ?: 0) * 60
+            secondMatcher.find() -> secondMatcher.group(1)?.toIntOrNull() ?: 0
+            else -> 0
+        }
+
+        if (totalSeconds <= 0) {
+            textToSpeechHelper.speak("Kitni der ka timer chahiye, bataiye.")
+            return true
+        }
+
+        val success = alarmHelper.setTimer(totalSeconds, "Nova Timer")
+        textToSpeechHelper.speak(
+            if (success) "Timer start ho gaya." else "Sorry, timer start nahi ho paya."
+        )
+        return true
+    }
+
+    private fun tryHandleSystem(lower: String): Boolean {
+        val hasVolumeWord = lower.contains("volume") || lower.contains("aawaz") || lower.contains("awaz")
+        val hasIncreaseWord = lower.contains("up") || lower.contains("increase") || lower.contains("badha") || lower.contains("tez")
+        val hasDecreaseWord = lower.contains("down") || lower.contains("decrease") || lower.contains("kam") || lower.contains("ghata")
+
+        when {
+            hasVolumeWord && hasIncreaseWord -> {
+                systemActionDispatcher.increaseVolume()
+                textToSpeechHelper.speak("Volume badha diya.")
+                return true
+            }
+            hasVolumeWord && hasDecreaseWord -> {
+                systemActionDispatcher.decreaseVolume()
+                textToSpeechHelper.speak("Volume kam kar diya.")
+                return true
+            }
+            lower.contains("mute") || lower.contains("chup") -> {
+                systemActionDispatcher.muteVolume()
+                textToSpeechHelper.speak("Mute kar diya.")
+                return true
+            }
+            lower.contains("wifi") || lower.contains("wi-fi") -> {
+                systemActionDispatcher.openWifiSettings()
+                textToSpeechHelper.speak("WiFi settings khol raha hoon.")
+                return true
+            }
+            lower.contains("bluetooth") -> {
+                systemActionDispatcher.openBluetoothSettings()
+                textToSpeechHelper.speak("Bluetooth settings khol raha hoon.")
+                return true
+            }
+        }
+        return false
     }
 
     private fun createNotificationChannel() {
@@ -92,6 +209,7 @@ class NovaListeningService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         speechRecognitionController.stopListening()
+        serviceScope.cancel()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
