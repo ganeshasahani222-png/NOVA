@@ -15,12 +15,18 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.core.app.NotificationCompat
 import com.nova.assistant.R
+import com.nova.assistant.ui.chat.ChatViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class NovaListeningService : Service() {
 
     private var speechRecognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var isListeningForWakeWord = true
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     companion object {
         const val CHANNEL_ID = "nova_listening_channel"
@@ -34,9 +40,7 @@ class NovaListeningService : Service() {
         startWakeWordListening()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     private fun startForegroundServiceWithNotification() {
         val channel = NotificationChannel(
@@ -76,8 +80,6 @@ class NovaListeningService : Service() {
             override fun onEndOfSpeech() {}
 
             override fun onError(error: Int) {
-                // Yahi woh jagah hai jahan pehle service ruk jaati thi.
-                // Ab har error par (11, 7, 6, 8 sab) bas thodi der baad phir se sunna shuru kar denge.
                 val delay = if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1500L else 600L
                 handler.postDelayed({ restartListening() }, delay)
             }
@@ -85,18 +87,17 @@ class NovaListeningService : Service() {
             override fun onResults(results: Bundle?) {
                 val text = results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()?.lowercase()?.trim() ?: ""
+                    ?.firstOrNull()?.trim() ?: ""
 
                 if (isListeningForWakeWord) {
-                    if (text.contains(WAKE_WORD)) {
+                    if (text.lowercase().contains(WAKE_WORD)) {
                         onWakeWordDetected()
                     } else {
                         restartListening()
                     }
                 } else {
                     isListeningForWakeWord = true
-                    // Agle step mein yahan command ko process karne wala function jodenge
-                    restartListening()
+                    handleSpokenCommand(text)
                 }
             }
 
@@ -115,8 +116,26 @@ class NovaListeningService : Service() {
 
     private fun onWakeWordDetected() {
         isListeningForWakeWord = false
-        // Agle step mein yahan "Ji sir, boliye" wala TTS call jodenge
-        handler.postDelayed({ restartListening() }, 1200L)
+        serviceScope.launch {
+            GeminiTtsHelper(applicationContext).speak("Ji sir, boliye")
+        }
+        handler.postDelayed({ restartListening() }, 1800L)
+    }
+
+    private fun handleSpokenCommand(command: String) {
+        if (command.isNotBlank()) {
+            val vm = ChatViewModel.activeInstance
+            if (vm != null) {
+                vm.onInputTextChanged(command)
+                vm.sendCurrentInput()
+            } else {
+                serviceScope.launch {
+                    GeminiTtsHelper(applicationContext)
+                        .speak("Pehle Nova app ko ek baar khol lo, phir background se command chalega")
+                }
+            }
+        }
+        restartListening()
     }
 
     override fun onDestroy() {
