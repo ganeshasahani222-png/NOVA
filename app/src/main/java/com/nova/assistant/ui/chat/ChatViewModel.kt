@@ -37,22 +37,9 @@ class ChatViewModel(
     private val callSmsHelper: CallSmsHelper
 ) : ViewModel() {
 
-    companion object {
-        var activeInstance: ChatViewModel? = null
-    }
-
-    init {
-        activeInstance = this
-    }
-
     var uiState by mutableStateOf(ChatUiState())
         private set
 
-    /**
-     * Speaks only via Gemini's natural voice. If Gemini fails
-     * (network issue, quota, etc.) Nova stays silent rather than
-     * falling back to the robotic on-device voice.
-     */
     private fun speak(text: String) {
         viewModelScope.launch {
             geminiTtsHelper.speak(text)
@@ -248,60 +235,25 @@ class ChatViewModel(
     }
 
     private fun tryHandleCallCommand(lower: String, originalText: String): Boolean {
-        val hasCallWord = lower.contains("call") || lower.contains("phone kar") || lower.contains("dial")
+        val hasCallWord = lower.contains("call")
         if (!hasCallWord) return false
 
-        val name = extractNameAfterKeywords(lower, listOf("call", "phone kar", "dial"))
         appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
-
-        if (name.isNullOrBlank()) {
-            val reply = "Kisko call karna hai, naam bataiye."
-            appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
-            speak(reply)
-            return true
-        }
-
-        val digitsOnly = name.replace(" ", "").replace("-", "")
-        val isPhoneNumber = digitsOnly.isNotEmpty() && digitsOnly.all { it.isDigit() || it == '+' } && digitsOnly.length >= 6
-
-        val phoneNumber = if (isPhoneNumber) digitsOnly else callSmsHelper.findPhoneNumberByName(name)
-
-        val reply = if (phoneNumber == null) {
-            "Sorry, mujhe $name ka number nahi mila contacts mein."
-        } else {
-            val success = callSmsHelper.callNumber(phoneNumber)
-            if (success) "Calling now." else "Sorry, call nahi kar paya. Permission check kariye."
-        }
+        val reply = callSmsHelper.makeCall(originalText)
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
         speak(reply)
         return true
     }
 
     private fun tryHandleSmsCommand(lower: String, originalText: String): Boolean {
-        val hasSmsWord = lower.contains("message") || lower.contains("sms") || lower.contains("text kar")
+        val hasSmsWord = lower.contains("msg karo") || lower.contains("message karo")
         if (!hasSmsWord) return false
 
         appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
-        val reply = "SMS feature abhi basic hai — kisko aur kya message bhejna hai, dono clearly bataiye jaise: message Papa ko bolo main aa raha hoon."
+        val reply = callSmsHelper.sendSms(originalText)
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
         speak(reply)
         return true
-    }
-
-    private fun extractNameAfterKeywords(lower: String, keywords: List<String>): String? {
-        for (keyword in keywords) {
-            val index = lower.indexOf(keyword)
-            if (index >= 0) {
-                val after = lower.substring(index + keyword.length).trim()
-                val cleaned = after
-                    .replace("ko", "")
-                    .replace("karo", "")
-                    .replace("kar do", "")
-                    .trim()
-                if (cleaned.isNotBlank()) return cleaned
-            }
-        }
-        return null
     }
 
     private fun sendMessage(text: String) {
@@ -330,6 +282,5 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         speechRecognitionController.stopListening()
-        if (activeInstance == this) activeInstance = null
     }
 }
