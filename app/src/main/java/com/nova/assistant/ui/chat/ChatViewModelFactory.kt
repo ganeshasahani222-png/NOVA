@@ -1,4 +1,4 @@
-package com.nova.assistant.ui.chat
+com.nova.assistant.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -12,8 +12,7 @@ class ChatViewModelFactory(private val container: NovaContainer) : ViewModelProv
             aiEngine = container.aiEngine,
             speechRecognitionController = container.speechRecognitionController,
             textToSpeechHelper = container.textToSpeechHelper,
+            geminiTtsHelper = container.geminiTtsHelper,
             alarmHelper = container.alarmHelper,
             systemActionDispatcher = container.systemActionDispatcher
         ) as T
-    }
-}
