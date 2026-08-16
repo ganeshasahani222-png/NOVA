@@ -10,6 +10,7 @@ import com.nova.assistant.ai.AiResult
 import com.nova.assistant.data.ChatMessage
 import com.nova.assistant.data.Sender
 import com.nova.assistant.intents.AlarmHelper
+import com.nova.assistant.intents.CallSmsHelper
 import com.nova.assistant.intents.SystemActionDispatcher
 import com.nova.assistant.voice.GeminiTtsHelper
 import com.nova.assistant.voice.SpeechRecognitionController
@@ -32,7 +33,8 @@ class ChatViewModel(
     private val textToSpeechHelper: TextToSpeechHelper,
     private val geminiTtsHelper: GeminiTtsHelper,
     private val alarmHelper: AlarmHelper,
-    private val systemActionDispatcher: SystemActionDispatcher
+    private val systemActionDispatcher: SystemActionDispatcher,
+    private val callSmsHelper: CallSmsHelper
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ChatUiState())
@@ -108,6 +110,8 @@ class ChatViewModel(
             if (tryHandleAlarmCommand(lower, text)) return
             if (tryHandleTimerCommand(lower, text)) return
             if (tryHandleSystemCommand(lower, text)) return
+            if (tryHandleCallCommand(lower, text)) return
+            if (tryHandleSmsCommand(lower, text)) return
 
             sendMessage(text)
         } catch (e: Exception) {
@@ -231,6 +235,60 @@ class ChatViewModel(
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
         speak(reply)
         return true
+    }
+
+    private fun tryHandleCallCommand(lower: String, originalText: String): Boolean {
+        val hasCallWord = lower.contains("call") || lower.contains("phone kar") || lower.contains("dial")
+        if (!hasCallWord) return false
+
+        val name = extractNameAfterKeywords(lower, listOf("call", "phone kar", "dial"))
+        appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
+
+        if (name.isNullOrBlank()) {
+            val reply = "Kisko call karna hai, naam bataiye."
+            appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+            speak(reply)
+            return true
+        }
+
+        val phoneNumber = if (name.all { it.isDigit() || it == '+' }) name else callSmsHelper.findPhoneNumberByName(name)
+
+        val reply = if (phoneNumber == null) {
+            "Sorry, mujhe $name ka number nahi mila contacts mein."
+        } else {
+            val success = callSmsHelper.callNumber(phoneNumber)
+            if (success) "Calling $name now." else "Sorry, call nahi kar paya. Permission check kariye."
+        }
+        appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+        speak(reply)
+        return true
+    }
+
+    private fun tryHandleSmsCommand(lower: String, originalText: String): Boolean {
+        val hasSmsWord = lower.contains("message") || lower.contains("sms") || lower.contains("text kar")
+        if (!hasSmsWord) return false
+
+        appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
+        val reply = "SMS feature abhi basic hai — kisko aur kya message bhejna hai, dono clearly bataiye jaise: message Papa ko bolo main aa raha hoon."
+        appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
+        speak(reply)
+        return true
+    }
+
+    private fun extractNameAfterKeywords(lower: String, keywords: List<String>): String? {
+        for (keyword in keywords) {
+            val index = lower.indexOf(keyword)
+            if (index >= 0) {
+                val after = lower.substring(index + keyword.length).trim()
+                val cleaned = after
+                    .replace("ko", "")
+                    .replace("karo", "")
+                    .replace("kar do", "")
+                    .trim()
+                if (cleaned.isNotBlank()) return cleaned
+            }
+        }
+        return null
     }
 
     private fun sendMessage(text: String) {
