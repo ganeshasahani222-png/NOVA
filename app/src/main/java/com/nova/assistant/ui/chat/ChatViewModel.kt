@@ -11,6 +11,7 @@ import com.nova.assistant.data.ChatMessage
 import com.nova.assistant.data.Sender
 import com.nova.assistant.intents.AlarmHelper
 import com.nova.assistant.intents.SystemActionDispatcher
+import com.nova.assistant.voice.GeminiTtsHelper
 import com.nova.assistant.voice.SpeechRecognitionController
 import com.nova.assistant.voice.TextToSpeechHelper
 import com.nova.assistant.voice.VoiceListener
@@ -29,12 +30,22 @@ class ChatViewModel(
     private val aiEngine: AiEngine,
     private val speechRecognitionController: SpeechRecognitionController,
     private val textToSpeechHelper: TextToSpeechHelper,
+    private val geminiTtsHelper: GeminiTtsHelper,
     private val alarmHelper: AlarmHelper,
     private val systemActionDispatcher: SystemActionDispatcher
 ) : ViewModel() {
 
     var uiState by mutableStateOf(ChatUiState())
         private set
+
+    private fun speak(text: String) {
+        viewModelScope.launch {
+            val success = geminiTtsHelper.speak(text)
+            if (!success) {
+                textToSpeechHelper.speak(text)
+            }
+        }
+    }
 
     fun onInputTextChanged(text: String) {
         uiState = uiState.copy(inputText = text)
@@ -66,7 +77,7 @@ class ChatViewModel(
                 val lowerText = text.trim().lowercase()
 
                 if (!isFollowUpCommand && lowerText.contains("nova")) {
-                    textToSpeechHelper.speak("Ji sir, boliye. Kya kaam hai, kis kaam se yaad kiya?")
+                    speak("Ji sir, boliye. Kya kaam hai, kis kaam se yaad kiya?")
                     listenOnce(isFollowUpCommand = true)
                 } else {
                     handleIncomingText(text)
@@ -132,7 +143,7 @@ class ChatViewModel(
             }
             appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
             appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
-            textToSpeechHelper.speak(reply)
+            speak(reply)
             return true
         }
         return fallbackAlarm(originalText)
@@ -142,7 +153,7 @@ class ChatViewModel(
         appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
         val reply = "Please tell me a specific time, like 'set alarm at 7:30 am'."
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
-        textToSpeechHelper.speak(reply)
+        speak(reply)
         return true
     }
 
@@ -166,7 +177,7 @@ class ChatViewModel(
         if (totalSeconds <= 0) {
             val reply = "Please tell me how long, like 'set a timer for 5 minutes'."
             appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
-            textToSpeechHelper.speak(reply)
+            speak(reply)
             return true
         }
 
@@ -177,25 +188,29 @@ class ChatViewModel(
             "Sorry, I couldn't start the timer. No clock app found."
         }
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
-        textToSpeechHelper.speak(reply)
+        speak(reply)
         return true
     }
 
     private fun tryHandleSystemCommand(lower: String, originalText: String): Boolean {
+        val hasVolumeWord = lower.contains("volume") || lower.contains("aawaz") || lower.contains("awaz")
+        val hasIncreaseWord = lower.contains("up") || lower.contains("increase") || lower.contains("badha") || lower.contains("tez") || lower.contains("tej")
+        val hasDecreaseWord = lower.contains("down") || lower.contains("decrease") || lower.contains("kam") || lower.contains("ghata")
+
         val reply: String? = when {
-            lower.contains("volume up") || lower.contains("increase volume") -> {
+            hasVolumeWord && hasIncreaseWord -> {
                 systemActionDispatcher.increaseVolume()
                 "Volume increased."
             }
-            lower.contains("volume down") || lower.contains("decrease volume") -> {
+            hasVolumeWord && hasDecreaseWord -> {
                 systemActionDispatcher.decreaseVolume()
                 "Volume decreased."
             }
-            lower.contains("mute") -> {
+            lower.contains("mute") || lower.contains("chup") -> {
                 systemActionDispatcher.muteVolume()
                 "Muted."
             }
-            lower.contains("brightness") -> {
+            lower.contains("brightness") || lower.contains("roshni") -> {
                 systemActionDispatcher.openDisplaySettings()
                 "Opening display settings — you can adjust brightness there."
             }
@@ -214,7 +229,7 @@ class ChatViewModel(
 
         appendMessage(ChatMessage(sender = Sender.USER, text = originalText))
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
-        textToSpeechHelper.speak(reply)
+        speak(reply)
         return true
     }
 
@@ -227,7 +242,7 @@ class ChatViewModel(
             when (val result = aiEngine.generateResponse(text, history)) {
                 is AiResult.Success -> {
                     appendMessage(ChatMessage(sender = Sender.NOVA, text = result.text))
-                    textToSpeechHelper.speak(result.text)
+                    speak(result.text)
                 }
                 is AiResult.Failure -> appendMessage(
                     ChatMessage(sender = Sender.SYSTEM, text = result.message, isError = true)
