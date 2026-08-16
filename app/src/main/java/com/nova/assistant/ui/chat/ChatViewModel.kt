@@ -36,17 +36,13 @@ class ChatViewModel(
     private val systemActionDispatcher: SystemActionDispatcher,
     private val callSmsHelper: CallSmsHelper
 ) : ViewModel() {
+
     companion object {
         var activeInstance: ChatViewModel? = null
     }
 
     init {
         activeInstance = this
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        if (activeInstance == this) activeInstance = null
     }
 
     var uiState by mutableStateOf(ChatUiState())
@@ -265,8 +261,6 @@ class ChatViewModel(
             return true
         }
 
-        // Strip spaces/dashes before checking if this is a raw phone number
-        // (speech recognition often splits digits with spaces, e.g. "9 8 7 6").
         val digitsOnly = name.replace(" ", "").replace("-", "")
         val isPhoneNumber = digitsOnly.isNotEmpty() && digitsOnly.all { it.isDigit() || it == '+' } && digitsOnly.length >= 6
 
@@ -336,5 +330,6 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         speechRecognitionController.stopListening()
+        if (activeInstance == this) activeInstance = null
     }
 }
