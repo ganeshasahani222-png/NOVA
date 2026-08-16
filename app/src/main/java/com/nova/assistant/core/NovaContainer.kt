@@ -8,6 +8,7 @@ import com.nova.assistant.intents.AlarmHelper
 import com.nova.assistant.intents.CallSmsHelper
 import com.nova.assistant.intents.SystemActionDispatcher
 import com.nova.assistant.voice.GeminiTtsHelper
+import com.nova.assistant.voice.NovaVoiceEngine
 import com.nova.assistant.voice.SpeechRecognitionController
 import com.nova.assistant.voice.TextToSpeechHelper
 
@@ -19,6 +20,7 @@ class NovaContainer(context: Context) {
     val speechRecognitionController = SpeechRecognitionController(appContext)
     val textToSpeechHelper = TextToSpeechHelper(appContext)
     val geminiTtsHelper = GeminiTtsHelper(appContext)
+    val novaVoiceEngine = NovaVoiceEngine(appContext)
     val systemActionDispatcher = SystemActionDispatcher(appContext)
     val deviceAdminManager = DeviceAdminManager(appContext)
     val alarmHelper = AlarmHelper(appContext)
