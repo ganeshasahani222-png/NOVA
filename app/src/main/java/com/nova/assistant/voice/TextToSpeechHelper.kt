@@ -17,8 +17,27 @@ class TextToSpeechHelper(context: Context) {
         tts = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.getDefault()
+                selectFemaleVoice()
+                tts?.setPitch(1.15f)
+                tts?.setSpeechRate(1.0f)
                 isReady = true
             }
+        }
+    }
+
+    private fun selectFemaleVoice() {
+        val engine = tts ?: return
+        val voices = engine.voices ?: return
+
+        val femaleVoice = voices.firstOrNull { voice ->
+            voice.name.contains("female", ignoreCase = true) &&
+                voice.locale.language == Locale.getDefault().language
+        } ?: voices.firstOrNull { voice ->
+            voice.name.contains("female", ignoreCase = true)
+        }
+
+        if (femaleVoice != null) {
+            engine.voice = femaleVoice
         }
     }
 
