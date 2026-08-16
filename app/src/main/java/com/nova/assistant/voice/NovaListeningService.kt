@@ -22,16 +22,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.regex.Pattern
 
-/**
- * Foreground service that keeps the microphone listening even while
- * Nova is in the background. Android requires a visible, ongoing
- * notification for any background microphone use — this is a system
- * rule that cannot be bypassed, even by the app's own developer.
- */
 class NovaListeningService : Service() {
 
     private lateinit var speechRecognitionController: SpeechRecognitionController
-    private lateinit var textToSpeechHelper: TextToSpeechHelper
+    private lateinit var geminiTtsHelper: GeminiTtsHelper
     private lateinit var alarmHelper: AlarmHelper
     private lateinit var systemActionDispatcher: SystemActionDispatcher
     private lateinit var container: com.nova.assistant.core.NovaContainer
@@ -42,13 +36,19 @@ class NovaListeningService : Service() {
         super.onCreate()
         container = (application as NovaApplication).container
         speechRecognitionController = container.speechRecognitionController
-        textToSpeechHelper = container.textToSpeechHelper
+        geminiTtsHelper = container.geminiTtsHelper
         alarmHelper = container.alarmHelper
         systemActionDispatcher = container.systemActionDispatcher
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         listenOnce(isFollowUpCommand = false)
+    }
+
+    private fun speak(text: String) {
+        serviceScope.launch {
+            geminiTtsHelper.speak(text)
+        }
     }
 
     private fun listenOnce(isFollowUpCommand: Boolean) {
@@ -61,9 +61,7 @@ class NovaListeningService : Service() {
                 val lowerText = text.trim().lowercase()
 
                 if (!isFollowUpCommand && lowerText.contains("nova")) {
-                    textToSpeechHelper.speak(
-                        "Ji sir, boliye. Kya kaam hai, kis kaam se yaad kiya?"
-                    )
+                    speak("Ji sir, boliye. Kya kaam hai, kis kaam se yaad kiya?")
                     listenOnce(isFollowUpCommand = true)
                 } else if (isFollowUpCommand) {
                     handleCommand(text)
@@ -92,8 +90,8 @@ class NovaListeningService : Service() {
 
         serviceScope.launch {
             when (val result = container.aiEngine.generateResponse(text, emptyList())) {
-                is AiResult.Success -> textToSpeechHelper.speak(result.text)
-                is AiResult.Failure -> textToSpeechHelper.speak("Sorry, kuch problem hui.")
+                is AiResult.Success -> geminiTtsHelper.speak(result.text)
+                is AiResult.Failure -> geminiTtsHelper.speak("Sorry, kuch problem hui.")
             }
         }
     }
@@ -113,9 +111,7 @@ class NovaListeningService : Service() {
             if (meridiem == "am" && hour == 12) hour = 0
 
             val success = alarmHelper.setAlarm(hour, minute, "Nova Alarm")
-            textToSpeechHelper.speak(
-                if (success) "Alarm set." else "Sorry, alarm set nahi ho paya."
-            )
+            speak(if (success) "Alarm set." else "Sorry, alarm set nahi ho paya.")
             return true
         }
         return false
@@ -137,46 +133,44 @@ class NovaListeningService : Service() {
         }
 
         if (totalSeconds <= 0) {
-            textToSpeechHelper.speak("Kitni der ka timer chahiye, bataiye.")
+            speak("Kitni der ka timer chahiye, bataiye.")
             return true
         }
 
         val success = alarmHelper.setTimer(totalSeconds, "Nova Timer")
-        textToSpeechHelper.speak(
-            if (success) "Timer start ho gaya." else "Sorry, timer start nahi ho paya."
-        )
+        speak(if (success) "Timer start ho gaya." else "Sorry, timer start nahi ho paya.")
         return true
     }
 
     private fun tryHandleSystem(lower: String): Boolean {
         val hasVolumeWord = lower.contains("volume") || lower.contains("aawaz") || lower.contains("awaz")
-        val hasIncreaseWord = lower.contains("up") || lower.contains("increase") || lower.contains("badha") || lower.contains("tez")
+        val hasIncreaseWord = lower.contains("up") || lower.contains("increase") || lower.contains("badha") || lower.contains("tez") || lower.contains("tej")
         val hasDecreaseWord = lower.contains("down") || lower.contains("decrease") || lower.contains("kam") || lower.contains("ghata")
 
         when {
             hasVolumeWord && hasIncreaseWord -> {
                 systemActionDispatcher.increaseVolume()
-                textToSpeechHelper.speak("Volume badha diya.")
+                speak("Volume badha diya.")
                 return true
             }
             hasVolumeWord && hasDecreaseWord -> {
                 systemActionDispatcher.decreaseVolume()
-                textToSpeechHelper.speak("Volume kam kar diya.")
+                speak("Volume kam kar diya.")
                 return true
             }
             lower.contains("mute") || lower.contains("chup") -> {
                 systemActionDispatcher.muteVolume()
-                textToSpeechHelper.speak("Mute kar diya.")
+                speak("Mute kar diya.")
                 return true
             }
             lower.contains("wifi") || lower.contains("wi-fi") -> {
                 systemActionDispatcher.openWifiSettings()
-                textToSpeechHelper.speak("WiFi settings khol raha hoon.")
+                speak("WiFi settings khol raha hoon.")
                 return true
             }
             lower.contains("bluetooth") -> {
                 systemActionDispatcher.openBluetoothSettings()
-                textToSpeechHelper.speak("Bluetooth settings khol raha hoon.")
+                speak("Bluetooth settings khol raha hoon.")
                 return true
             }
         }
