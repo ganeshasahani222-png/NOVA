@@ -40,12 +40,14 @@ class ChatViewModel(
     var uiState by mutableStateOf(ChatUiState())
         private set
 
+    /**
+     * Speaks only via Gemini's natural voice. If Gemini fails
+     * (network issue, quota, etc.) Nova stays silent rather than
+     * falling back to the robotic on-device voice.
+     */
     private fun speak(text: String) {
         viewModelScope.launch {
-            val success = geminiTtsHelper.speak(text)
-            if (!success) {
-                textToSpeechHelper.speak(text)
-            }
+            geminiTtsHelper.speak(text)
         }
     }
 
@@ -251,13 +253,18 @@ class ChatViewModel(
             return true
         }
 
-        val phoneNumber = if (name.all { it.isDigit() || it == '+' }) name else callSmsHelper.findPhoneNumberByName(name)
+        // Strip spaces/dashes before checking if this is a raw phone number
+        // (speech recognition often splits digits with spaces, e.g. "9 8 7 6").
+        val digitsOnly = name.replace(" ", "").replace("-", "")
+        val isPhoneNumber = digitsOnly.isNotEmpty() && digitsOnly.all { it.isDigit() || it == '+' } && digitsOnly.length >= 6
+
+        val phoneNumber = if (isPhoneNumber) digitsOnly else callSmsHelper.findPhoneNumberByName(name)
 
         val reply = if (phoneNumber == null) {
             "Sorry, mujhe $name ka number nahi mila contacts mein."
         } else {
             val success = callSmsHelper.callNumber(phoneNumber)
-            if (success) "Calling $name now." else "Sorry, call nahi kar paya. Permission check kariye."
+            if (success) "Calling now." else "Sorry, call nahi kar paya. Permission check kariye."
         }
         appendMessage(ChatMessage(sender = Sender.NOVA, text = reply))
         speak(reply)
