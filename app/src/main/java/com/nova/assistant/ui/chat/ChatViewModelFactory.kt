@@ -14,7 +14,8 @@ class ChatViewModelFactory(private val container: NovaContainer) : ViewModelProv
             textToSpeechHelper = container.textToSpeechHelper,
             geminiTtsHelper = container.geminiTtsHelper,
             alarmHelper = container.alarmHelper,
-            systemActionDispatcher = container.systemActionDispatcher
+            systemActionDispatcher = container.systemActionDispatcher,
+            callSmsHelper = container.callSmsHelper
         ) as T
     }
 }
